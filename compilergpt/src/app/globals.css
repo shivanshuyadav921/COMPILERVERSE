@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body { height: 100%; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #12121a; }
+::-webkit-scrollbar-thumb { background: #2a2a38; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #38384a; }
+
+.mono { font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace; }
+
+.tab-btn {
+  @apply px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap;
+}
+.tab-btn-active {
+  @apply bg-accent/20 text-accent border border-accent/40;
+}
+.tab-btn-inactive {
+  @apply text-gray-400 hover:text-gray-200 hover:bg-panel2 border border-transparent;
+}
+
+.card {
+  @apply bg-panel border border-border rounded-lg;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+.pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
