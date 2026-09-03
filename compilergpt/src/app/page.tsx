@@ -37,7 +37,7 @@ import FileExplorerSidebar, { FileItem } from "@/components/FileExplorerSidebar"
 import SettingsModal from "@/components/SettingsModal";
 import BottomTerminalConsole from "@/components/BottomTerminalConsole";
 import { createSessionRecord, exportSessionJSON, exportHTMLReport } from "@/lib/compiler/session";
-import { encodeSessionToUrlParam } from "@/lib/compiler/share";
+import { encodeSessionToUrlParam, decodeSessionFromUrlParam } from "@/lib/compiler/share";
 
 const CodeEditor = dynamic(() => import("@/components/CodeEditor"), { ssr: false });
 
@@ -165,10 +165,46 @@ export default function Home() {
     });
     if (typeof window !== "undefined") {
       const fullUrl = `${window.location.origin}/?session=${sessionUrlParam}`;
-      navigator.clipboard?.writeText(fullUrl);
+      navigator.clipboard?.writeText(fullUrl).catch(() => {
+        // Fallback if clipboard isn't available
+        prompt("Copy this shareable URL:", fullUrl);
+      });
       alert("Shareable compilation URL copied to clipboard! Anyone opening this link will reproduce your exact session.");
     }
   };
+
+  // Restore session from ?session= URL parameter (share link reconstruction)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const sessionParam = params.get("session");
+    if (!sessionParam) return;
+
+    try {
+      const decoded = decodeSessionFromUrlParam(sessionParam);
+      if (!decoded?.source) return;
+
+      const lang = decoded.language || "nova";
+      const sharedFile: FileItem = {
+        id: "file-shared",
+        name: `shared.${lang === "c" ? "c" : "nova"}`,
+        content: decoded.source,
+      };
+
+      setLanguage(lang);
+      setFiles(prev => [sharedFile, ...prev.filter(f => f.id !== "file-shared")]);
+      setActiveFileId("file-shared");
+      setViewMode("ide");
+
+      // Clean up URL param without full reload
+      const url = new URL(window.location.href);
+      url.searchParams.delete("session");
+      window.history.replaceState({}, "", url.toString());
+    } catch {
+      // Silently ignore malformed session params
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Keyboard Shortcuts
   useEffect(() => {
@@ -386,11 +422,12 @@ export default function Home() {
               fontSize={fontSize}
               tabSize={tabSize}
               theme={theme}
+              language={language}
             />
           </div>
 
           {/* Bottom Terminal Console */}
-          <div className="h-36 border-t border-border bg-surface shrink-0">
+          <div className="border-t border-border bg-surface shrink-0">
             <BottomTerminalConsole
               result={result}
               compiling={compiling}
@@ -404,7 +441,6 @@ export default function Home() {
                 if (!result) return;
                 exportHTMLReport(result);
               }}
-
             />
           </div>
 

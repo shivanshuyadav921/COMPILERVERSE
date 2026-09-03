@@ -9,6 +9,7 @@ interface CodeEditorProps {
   fontSize?: number;
   tabSize?: number;
   theme?: string;
+  language?: "nova" | "c";
 }
 
 export default function CodeEditor({
@@ -18,6 +19,7 @@ export default function CodeEditor({
   fontSize = 13,
   tabSize = 2,
   theme = "vs-dark",
+  language = "nova",
 }: CodeEditorProps) {
   const monacoRef = useRef<Monaco | null>(null);
   const editorRef = useRef<any>(null);
@@ -28,7 +30,6 @@ export default function CodeEditor({
     // Register Nova language if not already registered
     if (!monaco.languages.getLanguages().some((lang: any) => lang.id === "nova")) {
       monaco.languages.register({ id: "nova" });
-
 
       monaco.languages.setMonarchTokensProvider("nova", {
         keywords: ["fn", "let", "if", "else", "while", "for", "return", "print", "true", "false", "struct", "import"],
@@ -62,7 +63,6 @@ export default function CodeEditor({
       monaco.languages.registerCompletionItemProvider("nova", {
         provideCompletionItems: (model: any, position: any) => {
           const suggestions = [
-
             {
               label: "fn",
               kind: monaco.languages.CompletionItemKind.Keyword,
@@ -92,6 +92,20 @@ export default function CodeEditor({
               documentation: "While loop statement",
             },
             {
+              label: "for",
+              kind: monaco.languages.CompletionItemKind.Keyword,
+              insertText: "for (${1:init}; ${2:cond}; ${3:update}) {\n\t$0\n}",
+              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+              documentation: "For loop statement",
+            },
+            {
+              label: "return",
+              kind: monaco.languages.CompletionItemKind.Keyword,
+              insertText: "return ${1:value};",
+              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+              documentation: "Return statement",
+            },
+            {
               label: "print",
               kind: monaco.languages.CompletionItemKind.Function,
               insertText: "print(${1:message});",
@@ -102,11 +116,37 @@ export default function CodeEditor({
           return { suggestions };
         },
       });
+
+      // Nova hover provider — shows type and keyword docs
+      monaco.languages.registerHoverProvider("nova", {
+        provideHover: (model: any, position: any) => {
+          const word = model.getWordAtPosition(position);
+          if (!word) return null;
+          const hoverDocs: Record<string, string> = {
+            fn: "**fn** — Function declaration keyword. Creates a named function with parameters.",
+            let: "**let** — Variable declaration keyword. Declares and optionally initializes a variable.",
+            if: "**if** — Conditional statement keyword.",
+            else: "**else** — Alternative branch for if statement.",
+            while: "**while** — Loop statement: executes body while condition is true.",
+            for: "**for** — Loop statement with initializer, condition, and update.",
+            return: "**return** — Returns a value from the current function.",
+            print: "**print(value)** — Built-in output function. Prints value to stdout.",
+            true: "**true** — Boolean literal (bool type).",
+            false: "**false** — Boolean literal (bool type).",
+          };
+          const doc = hoverDocs[word.word];
+          if (doc) {
+            return { contents: [{ value: doc }] };
+          }
+          return null;
+        },
+      });
     }
   };
 
   const handleOnMount = (editor: any, monaco: Monaco) => {
     editorRef.current = editor;
+    monacoRef.current = monaco;
   };
 
   // Update error squiggles in Monaco when compiler errors change
@@ -119,7 +159,7 @@ export default function CodeEditor({
       startLineNumber: err.line ?? 1,
       startColumn: err.col ?? 1,
       endLineNumber: err.line ?? 1,
-      endColumn: (err.col ?? 1) + 10,
+      endColumn: (err.col ?? 1) + 12,
       message: err.message,
       severity: monacoRef.current!.MarkerSeverity.Error,
     }));
@@ -127,10 +167,13 @@ export default function CodeEditor({
     monacoRef.current.editor.setModelMarkers(model, "compiler", markers);
   }, [errors]);
 
+  // Monaco language identifier: use built-in "c" for C-subset files
+  const monacoLanguage = language === "c" ? "c" : "nova";
+
   return (
     <Editor
       height="100%"
-      language="nova"
+      language={monacoLanguage}
       theme={theme}
       value={value}
       onChange={(v) => onChange(v || "")}
@@ -148,8 +191,11 @@ export default function CodeEditor({
         renderLineHighlight: "all",
         bracketPairColorization: { enabled: true },
         folding: true,
+        wordWrap: "off",
+        smoothScrolling: true,
+        cursorBlinking: "smooth",
+        renderWhitespace: "selection",
       }}
     />
   );
 }
-
