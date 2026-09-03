@@ -2,9 +2,16 @@
 import { useState } from "react";
 import { DEFAULT_WORKSPACE_FILES, VirtualFile, compileWorkspace } from "@/lib/compiler/workspace";
 
-export default function MultiFileWorkspaceView({ onWorkspaceCompiled }: { onWorkspaceCompiled: (res: any) => void }) {
+export default function MultiFileWorkspaceView({
+  onWorkspaceCompiled,
+  workspace,
+}: {
+  onWorkspaceCompiled?: (res: any) => void;
+  workspace?: { files: { name: string; content: string }[]; entryPoint?: string };
+}) {
   const [files, setFiles] = useState<VirtualFile[]>(DEFAULT_WORKSPACE_FILES);
   const [activeFileName, setActiveFileName] = useState("Main.nova");
+
 
   const activeFile = files.find(f => f.name === activeFileName) || files[0];
 
@@ -14,8 +21,9 @@ export default function MultiFileWorkspaceView({ onWorkspaceCompiled }: { onWork
 
   function handleCompile() {
     const res = compileWorkspace(files);
-    onWorkspaceCompiled(res.compileResult);
+    onWorkspaceCompiled?.(res.compileResult);
   }
+
 
   return (
     <div className="h-full flex flex-col p-4 space-y-3">

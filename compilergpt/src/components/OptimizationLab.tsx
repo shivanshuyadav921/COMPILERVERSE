@@ -10,7 +10,22 @@ const PASSES = [
   { key: "peepholeOptimization", label: "Peephole Optimization" },
 ];
 
-export default function OptimizationLab({ enabled, setEnabled }: { enabled: Record<string, boolean>; setEnabled: (e: Record<string, boolean>) => void }) {
+export default function OptimizationLab({
+  enabled,
+  setEnabled,
+  onToggle,
+  logs,
+}: {
+  enabled: Record<string, boolean>;
+  setEnabled?: (e: Record<string, boolean>) => void;
+  onToggle?: (key: string) => void;
+  logs?: any[];
+}) {
+  const handleToggle = (key: string, checked: boolean) => {
+    if (onToggle) onToggle(key);
+    else if (setEnabled) setEnabled({ ...enabled, [key]: checked });
+  };
+
   return (
     <div className="p-3 space-y-2">
       <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">Optimization Passes</div>
@@ -19,9 +34,10 @@ export default function OptimizationLab({ enabled, setEnabled }: { enabled: Reco
           <input
             type="checkbox"
             checked={enabled[p.key] !== false}
-            onChange={(e) => setEnabled({ ...enabled, [p.key]: e.target.checked })}
+            onChange={(e) => handleToggle(p.key, e.target.checked)}
             className="accent-accent"
           />
+
           <span className="text-gray-200">{p.label}</span>
         </label>
       ))}

@@ -1,5 +1,6 @@
 "use client";
-export default function SymbolTableView({ symbols, errors }: { symbols: any[]; errors: any[] }) {
+export default function SymbolTableView({ symbols, errors = [] }: { symbols: any[]; errors?: any[] }) {
+
   return (
     <div className="overflow-auto h-full">
       {errors && errors.length > 0 && (

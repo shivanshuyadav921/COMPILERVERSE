@@ -452,10 +452,12 @@ export default function Home() {
                 {tab === "parsetable" && <ParseTableView parseTrace={result.parseTrace} />}
                 {tab === "ast" && <ASTView ast={result.ast} errors={result.parseErrors} />}
                 {tab === "scopetree" && <ScopeTreeView scopeTree={result.scopeTree} />}
-                {tab === "symbols" && <SymbolTableView symbols={result.symbolTable} />}
+                {tab === "symbols" && <SymbolTableView symbols={result.symbolTable} errors={result.semanticErrors} />}
+
                 {tab === "ir" && (
                   <div className="h-full grid grid-cols-2 gap-2 p-2">
-                    <IRView ir={result.ir} irOptimized={result.irOptimized} />
+                    <IRView ir={result.ir} irOptimized={result.irOptimized} logs={result.optimizationLogs} />
+
                     <OptimizationLab
                       enabled={enabled}
                       onToggle={(key) => setEnabled((prev) => ({ ...prev, [key]: !prev[key] }))}

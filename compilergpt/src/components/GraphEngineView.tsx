@@ -2,38 +2,58 @@
 import { useState } from "react";
 import InteractiveGraphCanvas, { GraphNode, GraphEdge } from "./InteractiveGraphCanvas";
 
-export default function GraphEngineView({ result }: { result: any }) {
+export default function GraphEngineView({
+  result,
+  ast,
+  cfg,
+  callGraph,
+  dominators,
+  regAlloc,
+}: {
+  result?: any;
+  ast?: any;
+  cfg?: any;
+  callGraph?: any;
+  dominators?: any;
+  regAlloc?: any;
+}) {
+  // Merge individual props into a result-like object for backwards compatibility
+  const data = result || { ast, cfgAfter: cfg, callGraph, dominators, regAlloc };
+
   const [graphType, setGraphType] = useState<"ast" | "cfg" | "callgraph" | "dominators" | "interference">("cfg");
 
-  if (!result) return <div className="text-gray-500 text-sm p-4">No graph engine data available.</div>;
+  if (!data) return <div className="text-gray-500 text-sm p-4">No graph engine data available.</div>;
 
   let nodes: GraphNode[] = [];
   let edges: GraphEdge[] = [];
   let title = "Graph Engine";
 
+
+
   if (graphType === "ast") {
     title = "Abstract Syntax Tree (AST) Graph";
-    nodes = (result.ast?.body || []).map((stmt: any, idx: number) => ({
+    nodes = (data.ast?.body || []).map((stmt: any, idx: number) => ({
       id: stmt.id || `ast_stmt_${idx}`,
-      label: stmt.type,
-      sublabel: `Line ${stmt.line || 1}`,
+      label: stmt.kind || stmt.type || "Node",
+      sublabel: `Line ${stmt.pos?.line || stmt.line || 1}`,
       color: "#7c5cff",
     }));
-    edges = (result.ast?.body || []).slice(0, -1).map((stmt: any, idx: number) => ({
+    edges = (data.ast?.body || []).slice(0, -1).map((stmt: any, idx: number) => ({
       from: stmt.id || `ast_stmt_${idx}`,
-      to: result.ast?.body[idx + 1]?.id || `ast_stmt_${idx + 1}`,
+      to: data.ast?.body[idx + 1]?.id || `ast_stmt_${idx + 1}`,
       label: "next_stmt",
       color: "#7c5cff",
     }));
   } else if (graphType === "cfg") {
     title = "Control Flow Graph (CFG)";
-    nodes = (result.cfgAfter?.blocks || []).map((b: any) => ({
+    const cfgData = data.cfgAfter || data.cfg;
+    nodes = (cfgData?.blocks || []).map((b: any) => ({
       id: b.id,
-      label: `${b.label} (${b.id})`,
-      sublabel: `${b.instrs.length} instrs`,
+      label: `${b.label || b.id}`,
+      sublabel: `${(b.instrs || b.instructions || []).length} instrs`,
       color: "#38e1c6",
     }));
-    edges = (result.cfgAfter?.edges || []).map((e: any) => ({
+    edges = (cfgData?.edges || []).map((e: any) => ({
       from: e.from,
       to: e.to,
       label: e.kind,
@@ -41,13 +61,13 @@ export default function GraphEngineView({ result }: { result: any }) {
     }));
   } else if (graphType === "callgraph") {
     title = "Interprocedural Call Graph";
-    nodes = (result.callGraph?.nodes || []).map((n: any) => ({
+    nodes = (data.callGraph?.nodes || []).map((n: any) => ({
       id: n.id,
       label: `ƒ ${n.name}`,
       sublabel: `${n.callerCount} callers · ${n.calleeCount} callees`,
       color: n.isRecursive ? "#ff5c7c" : "#7c5cff",
     }));
-    edges = (result.callGraph?.edges || []).map((e: any) => ({
+    edges = (data.callGraph?.edges || []).map((e: any) => ({
       from: e.from,
       to: e.to,
       label: `${e.callCount}x call`,
@@ -55,13 +75,14 @@ export default function GraphEngineView({ result }: { result: any }) {
     }));
   } else if (graphType === "dominators") {
     title = "Dominator Tree Graph";
-    nodes = (result.cfgAfter?.blocks || []).map((b: any) => ({
+    const cfgData2 = data.cfgAfter || data.cfg;
+    nodes = (cfgData2?.blocks || []).map((b: any) => ({
       id: b.id,
       label: `Block ${b.id}`,
-      sublabel: `idom: ${result.dominators?.idom[b.id] || "ENTRY"}`,
+      sublabel: `idom: ${data.dominators?.idom[b.id] || "ENTRY"}`,
       color: "#7c5cff",
     }));
-    edges = Object.entries(result.dominators?.idom || {})
+    edges = Object.entries(data.dominators?.idom || {})
       .filter(([_, parent]) => parent !== null)
       .map(([bId, parent]: [string, any]) => ({
         from: parent,
@@ -71,19 +92,20 @@ export default function GraphEngineView({ result }: { result: any }) {
       }));
   } else if (graphType === "interference") {
     title = "Register Interference Graph";
-    nodes = (result.regAlloc?.nodes || []).map((n: any) => ({
+    nodes = (data.regAlloc?.nodes || []).map((n: any) => ({
       id: n.id,
       label: n.id,
       sublabel: n.isSpilled ? `SPILL (${n.color})` : `Reg: ${n.color}`,
       color: n.isSpilled ? "#ff5c7c" : "#38e1c6",
     }));
-    edges = (result.regAlloc?.edges || []).map((e: any) => ({
+    edges = (data.regAlloc?.edges || []).map((e: any) => ({
       from: e.from,
       to: e.to,
       label: "interferes",
       color: "#ff5c7c",
     }));
   }
+
 
   return (
     <div className="h-full flex flex-col">

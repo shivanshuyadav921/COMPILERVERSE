@@ -7,13 +7,16 @@ export default function CommandPalette({
   onSelectTab,
   onExportJSON,
   onExportReport,
+  onSelectPreset,
 }: {
   isOpen: boolean;
   onClose: () => void;
   onSelectTab: (tabKey: any) => void;
-  onExportJSON: () => void;
-  onExportReport: () => void;
+  onExportJSON?: () => void;
+  onExportReport?: () => void;
+  onSelectPreset?: (code: any) => void;
 }) {
+
   const [search, setSearch] = useState("");
 
   useEffect(() => {
@@ -47,9 +50,10 @@ export default function CommandPalette({
     { label: "Switch to Stack Layout", action: () => { onSelectTab("memory"); onClose(); } },
     { label: "Switch to Metrics Dashboard", action: () => { onSelectTab("metrics"); onClose(); } },
     { label: "Switch to Multi-File Workspace", action: () => { onSelectTab("workspace"); onClose(); } },
-    { label: "Export Session JSON Transcript", action: () => { onExportJSON(); onClose(); } },
-    { label: "Export Technical HTML/PDF Report", action: () => { onExportReport(); onClose(); } },
+    { label: "Export Session JSON Transcript", action: () => { onExportJSON?.(); onClose(); } },
+    { label: "Export Technical HTML/PDF Report", action: () => { onExportReport?.(); onClose(); } },
   ];
+
 
   const filtered = commands.filter(c => c.label.toLowerCase().includes(search.toLowerCase()));
 

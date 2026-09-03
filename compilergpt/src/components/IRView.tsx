@@ -1,5 +1,6 @@
 "use client";
-export default function IRView({ ir, irOptimized, logs }: { ir: string[]; irOptimized: string[]; logs: any[] }) {
+export default function IRView({ ir, irOptimized, logs = [] }: { ir: string[]; irOptimized: string[]; logs?: any[] }) {
+
   if (!ir || ir.length === 0) return <div className="text-gray-500 text-sm p-4">No IR yet — compile some code.</div>;
   return (
     <div className="overflow-auto h-full p-3 grid grid-cols-2 gap-3">

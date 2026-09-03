@@ -2,7 +2,8 @@
 import { useState } from "react";
 import { irToString } from "@/lib/compiler/ir";
 
-export default function SSAView({ ssa, irOptimized }: { ssa: any; irOptimized: string[] }) {
+export default function SSAView({ ssa, irOptimized = [] }: { ssa: any; irOptimized?: string[] }) {
+
   const [mode, setMode] = useState<"ssa" | "tac">("ssa");
 
   if (!ssa) return <div className="text-gray-500 text-sm p-4">No SSA data available.</div>;

@@ -351,23 +351,24 @@ export default function EducationalModeView({ result }: { result: CompileResult 
                 {result.cfgAfter.blocks.map((b: any) => (
                   <div key={b.id} className="p-2 bg-surface border border-border rounded">
                     <span className="text-muted-teal font-bold block">{b.id} (preds: {b.predecessors?.join(",") || "none"})</span>
-                    <pre className="text-[11px] text-text-secondary">{b.instructions.map((i: any) => i.op).join(", ")}</pre>
+                    <pre className="text-[11px] text-text-secondary">{(b.instrs || b.instructions || []).map((i: any) => i.op).join(", ")}</pre>
+
                   </div>
                 ))}
               </div>
             )}
             {step.id === 7 && (
               <div className="space-y-2">
-                {result.dataflow.liveVariables.iterations.slice(0, 3).map((it: any, idx: number) => (
-                  <div key={idx} className="p-2 bg-surface border border-border rounded text-[11px]">
-                    <span className="text-sage font-bold block">Iteration {it.iteration}</span>
-                    {Object.entries(it.in).map(([b, s]: any) => (
-                      <div key={b} className="text-text-secondary">IN[{b}] = &#123;{s.join(", ")}&#125;</div>
-                    ))}
+                {Object.entries(result.dataflow.liveVariables.in || {}).slice(0, 3).map(([blockId, vars]: any) => (
+                  <div key={blockId} className="p-2 bg-surface border border-border rounded text-[11px]">
+                    <span className="text-sage font-bold block">Block {blockId}</span>
+                    <div className="text-text-secondary">IN&#123;{Array.isArray(vars) ? vars.join(", ") : String(vars)}&#125;</div>
+                    <div className="text-text-secondary mt-0.5">OUT&#123;{Array.isArray(result.dataflow.liveVariables.out?.[blockId]) ? result.dataflow.liveVariables.out[blockId].join(", ") : "∅"}&#125;</div>
                   </div>
                 ))}
               </div>
             )}
+
             {step.id === 8 && (
               <div className="space-y-1">
                 {Object.entries(result.dominators.idom).map(([b, parent]: any) => (

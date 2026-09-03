@@ -80,7 +80,8 @@ export default function SideBySideCompareView({ currentSource }: { currentSource
                 {resA.cfgAfter.blocks.map((b) => (
                   <div key={b.id} className="p-2 bg-surface border border-border rounded">
                     <span className="text-muted-teal font-bold block">{b.id}</span>
-                    <pre className="text-[11px] text-text-secondary">{b.instructions.map((i) => i.op).join(", ")}</pre>
+                    <pre className="text-[11px] text-text-secondary">{(b.instrs || []).map((i: any) => i.op).join(", ")}</pre>
+
                   </div>
                 ))}
               </div>
@@ -144,7 +145,7 @@ export default function SideBySideCompareView({ currentSource }: { currentSource
                 {resB.cfgAfter.blocks.map((b) => (
                   <div key={b.id} className="p-2 bg-surface border border-border rounded">
                     <span className="text-muted-teal font-bold block">{b.id}</span>
-                    <pre className="text-[11px] text-text-secondary">{b.instructions.map((i) => i.op).join(", ")}</pre>
+                    <pre className="text-[11px] text-text-secondary">{(b.instrs || []).map((i: any) => i.op).join(", ")}</pre>
                   </div>
                 ))}
               </div>
