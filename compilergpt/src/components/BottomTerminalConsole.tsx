@@ -5,9 +5,18 @@ interface DiagnosticsProps {
   result: any;
   compiling: boolean;
   onRunCompile: () => void;
+  onExportJSON?: () => void;
+  onExportHTML?: () => void;
 }
 
-export default function BottomTerminalConsole({ result, compiling, onRunCompile }: DiagnosticsProps) {
+export default function BottomTerminalConsole({
+  result,
+  compiling,
+  onRunCompile,
+  onExportJSON,
+  onExportHTML,
+}: DiagnosticsProps) {
+
   const [activeSubTab, setActiveSubTab] = useState<"diagnostics" | "console" | "timeline" | "rawJson">("diagnostics");
   const [collapsed, setCollapsed] = useState(false);
 

@@ -2,31 +2,73 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body { height: 100%; }
+:root {
+  /* Dark earthy theme default */
+  --background: #141416;
+  --surface: #1b1b1f;
+  --surface-elevated: #242429;
+  --border: #32323a;
+  --text-primary: #ede8df;
+  --text-secondary: #9e978e;
+  --editor-background: #18181c;
+  --terminal-background: #121214;
+}
 
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: #12121a; }
-::-webkit-scrollbar-thumb { background: #2a2a38; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #38384a; }
+[data-theme="light"] {
+  /* Light warm ivory / cream theme */
+  --background: #fbf9f5;
+  --surface: #f4efe6;
+  --surface-elevated: #eae3d6;
+  --border: #d6ccbc;
+  --text-primary: #232326;
+  --text-secondary: #6e675f;
+  --editor-background: #fdfbf7;
+  --terminal-background: #eee8dc;
+}
 
-.mono { font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace; }
+html, body {
+  height: 100%;
+  background-color: var(--background);
+  color: var(--text-primary);
+}
+
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: var(--surface);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #50505c;
+}
+
+.mono {
+  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+}
 
 .tab-btn {
-  @apply px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap;
+  @apply px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap;
 }
 .tab-btn-active {
-  @apply bg-accent/20 text-accent border border-accent/40;
+  @apply bg-sage/20 text-sage border border-sage/40 font-semibold shadow-sm;
 }
 .tab-btn-inactive {
-  @apply text-gray-400 hover:text-gray-200 hover:bg-panel2 border border-transparent;
+  @apply text-text-secondary hover:text-text-primary hover:bg-surface-elevated border border-transparent;
 }
 
 .card {
-  @apply bg-panel border border-border rounded-lg;
+  @apply bg-surface border border-border rounded-lg shadow-sm;
 }
 
 @keyframes pulse-glow {
   0%, 100% { opacity: 0.6; }
   50% { opacity: 1; }
 }
-.pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+.pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}

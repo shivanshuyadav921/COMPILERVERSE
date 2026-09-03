@@ -39,4 +39,6 @@ export interface Index extends NodeBase { kind: "Index"; array: Expr; index: Exp
 
 let idCounter = 0;
 export function nextId(): string { return "n" + (idCounter++); }
+export const nid = nextId;
 export function resetIdCounter() { idCounter = 0; }
+

@@ -61,7 +61,7 @@ function children(node: any): { label: string; node: any }[] {
   }
 }
 
-function TreeNode({ node, label, depth, onSelect, selectedId }: { node: any; label: string; depth: number; onSelect: (n: any) => void; selectedId: string | null }) {
+function TreeNode({ node, label, depth, onSelect, selectedId }: { node: any; label: string; depth: number; onSelect?: (n: any) => void; selectedId?: string | null }) {
   const [open, setOpen] = useState(depth < 3);
   const kids = children(node);
   const isSelected = selectedId === node.id;
@@ -71,7 +71,7 @@ function TreeNode({ node, label, depth, onSelect, selectedId }: { node: any; lab
       <div
         className={`flex items-center gap-1.5 py-0.5 px-1.5 rounded cursor-pointer hover:bg-panel2 ${isSelected ? "bg-accent/20 border border-accent/40" : ""}`}
         style={{ marginLeft: depth * 14 }}
-        onClick={() => { onSelect(node); if (kids.length) setOpen(!open); }}
+        onClick={() => { onSelect?.(node); if (kids.length) setOpen(!open); }}
       >
         {kids.length > 0 && (
           <span className="text-gray-500 text-[10px] w-3">{open ? "▾" : "▸"}</span>
@@ -89,7 +89,7 @@ function TreeNode({ node, label, depth, onSelect, selectedId }: { node: any; lab
   );
 }
 
-export default function ASTView({ ast, onSelect, selectedId }: { ast: any; onSelect: (n: any) => void; selectedId: string | null }) {
+export default function ASTView({ ast, onSelect, selectedId, errors }: { ast: any; onSelect?: (n: any) => void; selectedId?: string | null; errors?: any[] }) {
   if (!ast) return <div className="text-gray-500 text-sm p-4">No AST yet — compile some code.</div>;
   return (
     <div className="mono text-xs overflow-auto h-full p-2">
@@ -97,3 +97,4 @@ export default function ASTView({ ast, onSelect, selectedId }: { ast: any; onSel
     </div>
   );
 }
+

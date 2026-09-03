@@ -7,6 +7,13 @@ import SymbolTableView from "@/components/SymbolTableView";
 import IRView from "@/components/IRView";
 import CFGView from "@/components/CFGView";
 import AssemblyView from "@/components/AssemblyView";
+import X86View from "@/components/X86View";
+import WasmView from "@/components/WasmView";
+import BenchmarkLabView from "@/components/BenchmarkLabView";
+import SideBySideCompareView from "@/components/SideBySideCompareView";
+import EducationalModeView from "@/components/EducationalModeView";
+import ResearchDashboardView from "@/components/ResearchDashboardView";
+import CollaborationPanel from "@/components/CollaborationPanel";
 import OptimizationLab from "@/components/OptimizationLab";
 import MentorChat from "@/components/MentorChat";
 import DataFlowView from "@/components/DataFlowView";
@@ -30,26 +37,34 @@ import FileExplorerSidebar, { FileItem } from "@/components/FileExplorerSidebar"
 import SettingsModal from "@/components/SettingsModal";
 import BottomTerminalConsole from "@/components/BottomTerminalConsole";
 import { createSessionRecord, exportSessionJSON, exportHTMLReport } from "@/lib/compiler/session";
+import { encodeSessionToUrlParam } from "@/lib/compiler/share";
 
 const CodeEditor = dynamic(() => import("@/components/CodeEditor"), { ssr: false });
 
 const DEFAULT_FILES: FileItem[] = DEMO_PROGRAMS.map((demo, idx) => ({
   id: `file-${idx + 1}`,
-  name: `${demo.name.replace(/\s+/g, "")}.nova`,
+  name: `${demo.name.replace(/[^a-zA-Z0-9]/g, "")}.${demo.language === "c" ? "c" : "nova"}`,
   content: demo.code,
 }));
 
 type TabKey =
   | "explorer" | "timeline" | "debugger" | "tokens" | "parsetable" | "ast" | "scopetree"
   | "symbols" | "ir" | "replay" | "cfg" | "canvas" | "dataflow" | "ssa" | "dominators"
-  | "regalloc" | "callgraph" | "memory" | "asm" | "metrics" | "workspace" | "mentor";
+  | "regalloc" | "callgraph" | "memory" | "x86" | "wasm" | "asm" | "benchmark"
+  | "compare" | "learn" | "research" | "collab" | "metrics" | "workspace" | "mentor";
 
 const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: "explorer", label: "Compiler Explorer", icon: "⚡" },
+  { key: "learn", label: "Learn Mode (Tutorial)", icon: "🎓" },
+  { key: "benchmark", label: "Benchmark Lab", icon: "📊" },
+  { key: "compare", label: "Side-by-Side Diff", icon: "⚖️" },
+  { key: "x86", label: "x86-64 Target", icon: "💻" },
+  { key: "wasm", label: "WebAssembly (WASM)", icon: "🌐" },
+  { key: "research", label: "AI Hallucination", icon: "🧪" },
   { key: "timeline", label: "Live Timeline", icon: "⏱️" },
   { key: "debugger", label: "Phase Debugger", icon: "🐛" },
   { key: "tokens", label: "Lexer", icon: "🔤" },
-  { key: "parsetable", label: "Parse Table", icon: "📊" },
+  { key: "parsetable", label: "Parse Table", icon: "📋" },
   { key: "ast", label: "AST", icon: "🌳" },
   { key: "scopetree", label: "Scope Tree", icon: "🔍" },
   { key: "symbols", label: "Symbol Table", icon: "🏷️" },
@@ -63,7 +78,7 @@ const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: "regalloc", label: "Reg Allocation", icon: "🎨" },
   { key: "callgraph", label: "Call Graph", icon: "📞" },
   { key: "memory", label: "Stack Layout", icon: "📦" },
-  { key: "asm", label: "Assembly", icon: "💻" },
+  { key: "collab", label: "Live Collab", icon: "👥" },
   { key: "metrics", label: "Metrics", icon: "📈" },
   { key: "workspace", label: "Workspace", icon: "📁" },
   { key: "mentor", label: "AI Mentor", icon: "🧠" },
@@ -71,6 +86,7 @@ const TABS: { key: TabKey; label: string; icon: string }[] = [
 
 export default function Home() {
   const [viewMode, setViewMode] = useState<"landing" | "ide">("landing");
+  const [language, setLanguage] = useState<"nova" | "c">("nova");
   const [files, setFiles] = useState<FileItem[]>(DEFAULT_FILES);
   const [activeFileId, setActiveFileId] = useState<string>(DEFAULT_FILES[0].id);
   const [result, setResult] = useState<any>(null);
@@ -103,60 +119,93 @@ export default function Home() {
     return files.find((f) => f.id === activeFileId) || files[0];
   }, [files, activeFileId]);
 
-  const runCompile = useCallback(async (src: string, passes: Record<string, boolean>) => {
+  const runCompile = useCallback(async (src: string, lang: "nova" | "c", passes: Record<string, boolean>) => {
     setCompiling(true);
     try {
       const res = await fetch("/api/compile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: src, enabledPasses: passes }),
+        body: JSON.stringify({ source: src, language: lang, enabledPasses: passes }),
       });
       const data = await res.json();
       setResult(data);
-    } catch (e) {
+    } catch {
       // ignore network errors
     } finally {
       setCompiling(false);
     }
   }, []);
 
-  // Debounced auto compilation
   useEffect(() => {
-    if (!autoCompile) return;
-    const t = setTimeout(() => runCompile(activeFile.content, enabled), 500);
-    return () => clearTimeout(t);
-  }, [activeFile.content, enabled, autoCompile, runCompile]);
+    if (activeFile?.content) {
+      const isC = activeFile.name.endsWith(".c");
+      const currentLang = isC ? "c" : language;
+      if (isC && language !== "c") setLanguage("c");
+      runCompile(activeFile.content, currentLang, enabled);
+    }
+  }, [activeFile?.content, language, enabled, runCompile]);
 
-  const allErrors = useMemo(() => {
-    if (!result) return [];
-    return [
-      ...(result.lexErrors || []),
-      ...(result.parseErrors || []),
-      ...(result.semanticErrors || []),
-    ];
-  }, [result]);
+  const handleEditorChange = (newCode: string) => {
+    setFiles((prev) =>
+      prev.map((f) => (f.id === activeFileId ? { ...f, content: newCode } : f))
+    );
+    if (autoCompile) {
+      runCompile(newCode, language, enabled);
+    }
+  };
 
-  const handleMouseDownSplitter = () => {
+  const handleShareSession = () => {
+    const sessionUrlParam = encodeSessionToUrlParam({
+      id: "share",
+      source: activeFile.content,
+      language,
+      optLevel,
+      target: "x86",
+      timestamp: new Date().toISOString(),
+    });
+    if (typeof window !== "undefined") {
+      const fullUrl = `${window.location.origin}/?session=${sessionUrlParam}`;
+      navigator.clipboard?.writeText(fullUrl);
+      alert("Shareable compilation URL copied to clipboard! Anyone opening this link will reproduce your exact session.");
+    }
+  };
+
+  // Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setCmdOpen((prev) => !prev);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        runCompile(activeFile.content, language, enabled);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        alert("File autosaved to workspace!");
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeFile.content, language, enabled, runCompile]);
+
+  // Panel Resizer Mouse Handlers
+  const handleMouseDown = (e: React.MouseEvent) => {
     isDraggingRef.current = true;
-    document.body.style.userSelect = "none";
+    e.preventDefault();
   };
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDraggingRef.current) return;
-      const totalWidth = window.innerWidth;
-      const sidebarOffset = showSidebar ? 224 : 0;
-      const availableWidth = totalWidth - sidebarOffset;
-      const currentX = e.clientX - sidebarOffset;
-      const newPercent = Math.max(20, Math.min(70, (currentX / availableWidth) * 100));
+      const containerWidth = window.innerWidth;
+      const newPercent = Math.max(20, Math.min(80, (e.clientX / containerWidth) * 100));
       setEditorWidthPercent(newPercent);
     };
 
     const handleMouseUp = () => {
-      if (isDraggingRef.current) {
-        isDraggingRef.current = false;
-        document.body.style.userSelect = "";
-      }
+      isDraggingRef.current = false;
     };
 
     window.addEventListener("mousemove", handleMouseMove);
@@ -165,87 +214,25 @@ export default function Home() {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [showSidebar]);
+  }, []);
 
-  useEffect(() => {
-    const handleGlobalHotkeys = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-        e.preventDefault();
-        runCompile(activeFile.content, enabled);
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
-        e.preventDefault();
-        if (result) exportSessionJSON(createSessionRecord(result));
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setCmdOpen((o) => !o);
-      } else if ((e.ctrlKey || e.metaKey) && !isNaN(Number(e.key)) && Number(e.key) >= 1 && Number(e.key) <= 9) {
-        e.preventDefault();
-        const tabIdx = Number(e.key) - 1;
-        if (TABS[tabIdx]) setTab(TABS[tabIdx].key);
-      }
-    };
-    window.addEventListener("keydown", handleGlobalHotkeys);
-    return () => window.removeEventListener("keydown", handleGlobalHotkeys);
-  }, [activeFile.content, enabled, result, runCompile]);
-
-  const handleUpdateActiveContent = (newContent: string) => {
-    setFiles((prev) =>
-      prev.map((f) => (f.id === activeFileId ? { ...f, content: newContent } : f))
-    );
-  };
-
-  const handleCreateFile = (name: string, content?: string) => {
-    const newFile: FileItem = {
-      id: `file-${Date.now()}`,
-      name,
-      content: content || "// New Nova source file\n",
-    };
-    setFiles((prev) => [...prev, newFile]);
-    setActiveFileId(newFile.id);
-  };
-
-  const handleRenameFile = (id: string, newName: string) => {
-    setFiles((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, name: newName } : f))
-    );
-  };
-
-  const handleDeleteFile = (id: string) => {
-    if (files.length <= 1) return;
-    setFiles((prev) => prev.filter((f) => f.id !== id));
-    if (activeFileId === id) {
-      const remaining = files.filter((f) => f.id !== id);
-      setActiveFileId(remaining[0].id);
-    }
-  };
-
-  const handleImportFiles = (imported: { name: string; content: string }[]) => {
-    const newFiles = imported.map((imp, idx) => ({
-      id: `imported-${Date.now()}-${idx}`,
-      name: imp.name,
-      content: imp.content,
-    }));
-    setFiles((prev) => [...prev, ...newFiles]);
-    if (newFiles.length > 0) setActiveFileId(newFiles[0].id);
-  };
-
-  const handleExportProject = () => {
-    const jsonStr = JSON.stringify(files, null, 2);
-    const blob = new Blob([jsonStr], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "nova_compiler_workspace.json";
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const errors = useMemo(() => {
+    if (!result) return [];
+    const errList = [];
+    if (result.lexErrors) errList.push(...result.lexErrors);
+    if (result.parseErrors) errList.push(...result.parseErrors);
+    if (result.semanticErrors) errList.push(...result.semanticErrors);
+    return errList;
+  }, [result]);
 
   if (viewMode === "landing") {
     return (
       <LandingPage
         onLaunchIDE={() => setViewMode("ide")}
-        onSelectDemo={(code) => {
-          handleUpdateActiveContent(code);
+        onSelectDemo={(code, demoLang) => {
+          if (demoLang) setLanguage(demoLang);
+          setFiles((prev) => [{ id: "file-demo", name: `demo.${demoLang === "c" ? "c" : "nova"}`, content: code }, ...prev]);
+          setActiveFileId("file-demo");
           setViewMode("ide");
         }}
       />
@@ -253,139 +240,193 @@ export default function Home() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-bg text-gray-100 overflow-hidden font-sans select-none">
-      {/* IDE Header Toolbar */}
-      <header className="h-11 border-b border-border bg-panel flex items-center px-3 gap-3 flex-shrink-0 text-xs z-20">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowSidebar(!showSidebar)}
-            className="p-1.5 rounded bg-panel2 border border-border text-gray-400 hover:text-white transition-colors"
-            title="Toggle File Explorer"
-          >
-            📁
-          </button>
-          <span className="font-extrabold text-accent tracking-wide text-sm bg-clip-text text-transparent bg-gradient-to-r from-accent to-accent2">
-            CompilerGPT
-          </span>
-          <span className="text-[10px] text-gray-400 bg-panel2 px-1.5 py-0.5 rounded border border-border">
-            v1.0
-          </span>
+    <div className="h-screen flex flex-col bg-background text-text-primary overflow-hidden font-sans select-none">
+      {/* Top Navbar Toolbar */}
+      <header className="h-11 border-b border-border bg-surface flex items-center justify-between px-3 z-20">
+        <div className="flex items-center gap-3">
           <button
             onClick={() => setViewMode("landing")}
-            className="text-xs px-2 py-0.5 rounded bg-panel2 border border-border text-gray-300 hover:text-white transition-colors flex items-center gap-1"
+            className="flex items-center gap-2 hover:opacity-80 transition-opacity"
           >
-            <span>🏠</span> Landing
+            <div className="w-6 h-6 rounded bg-sage flex items-center justify-center font-bold text-white text-xs shadow-sm">
+              C
+            </div>
+            <span className="font-extrabold text-sm tracking-tight text-text-primary hidden sm:inline-block">
+              CompilerGPT Universe
+            </span>
           </button>
-        </div>
 
-        {/* Breadcrumb Navigation */}
-        <div className="hidden sm:flex items-center gap-1 text-[11px] text-gray-400 border-l border-border pl-3 mono">
-          <span className="text-gray-500">workspace</span>
-          <span>/</span>
-          <span className="text-accent2 font-bold">{activeFile.name}</span>
-        </div>
-
-        <div className="ml-auto flex items-center gap-2">
           <button
-            onClick={() => runCompile(activeFile.content, enabled)}
-            disabled={compiling}
-            className="text-xs px-3 py-1 rounded-md bg-accent text-white font-bold hover:bg-accent/80 transition-all flex items-center gap-1.5 shadow-md shadow-accent/20"
+            onClick={() => setShowSidebar((prev) => !prev)}
+            className="px-2 py-1 bg-surface-elevated border border-border rounded text-[11px] text-text-secondary hover:text-text-primary"
+            title="Toggle File Explorer"
           >
-            <span>▶</span>
-            <span>{compiling ? "Compiling..." : "Compile (Ctrl+Enter)"}</span>
+            📁 Files
           </button>
 
+          {/* Language Selector */}
+          <div className="flex items-center gap-1 bg-surface-elevated px-2 py-0.5 rounded border border-border">
+            <span className="text-[10px] text-text-secondary font-semibold">Language:</span>
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as any)}
+              className="bg-transparent text-xs font-bold text-sage focus:outline-none cursor-pointer"
+            >
+              <option value="nova" className="bg-surface text-text-primary">Nova Language</option>
+              <option value="c" className="bg-surface text-text-primary">C-Subset Language</option>
+            </select>
+          </div>
+
+          <button
+            onClick={() => runCompile(activeFile.content, language, enabled)}
+            disabled={compiling}
+            className="px-3 py-1 bg-sage text-white font-bold rounded text-xs hover:bg-sage/80 transition-all flex items-center gap-1.5 shadow-sm"
+          >
+            {compiling ? "Compiling..." : "▶ Compile"}
+          </button>
+
+          <button
+            onClick={handleShareSession}
+            className="px-2.5 py-1 bg-surface-elevated border border-border hover:border-sage text-text-primary font-semibold rounded text-xs transition-all flex items-center gap-1"
+            title="Create Shareable URL"
+          >
+            🔗 Share
+          </button>
+        </div>
+
+        {/* Global Action Bar */}
+        <div className="flex items-center gap-2">
           <button
             onClick={() => setCmdOpen(true)}
-            className="text-xs px-2.5 py-1 rounded bg-panel2 border border-border text-gray-300 hover:text-white"
+            className="px-2 py-1 bg-surface-elevated border border-border text-[11px] text-text-secondary hover:text-text-primary rounded hidden md:flex items-center gap-1"
           >
-            ⌘K Palette
+            <span>Search</span>
+            <kbd className="bg-surface px-1 py-0.5 rounded text-[9px] border border-border">Ctrl+K</kbd>
           </button>
 
           <button
             onClick={() => setSettingsOpen(true)}
-            className="text-xs px-2.5 py-1 rounded bg-panel2 border border-border text-gray-300 hover:text-white"
+            className="px-2 py-1 bg-surface-elevated border border-border text-[11px] text-text-secondary hover:text-text-primary rounded"
+            title="IDE Settings"
           >
             ⚙️ Settings
-          </button>
-
-          <button
-            onClick={() => result && exportSessionJSON(createSessionRecord(result))}
-            className="hidden lg:inline-block text-xs px-2.5 py-1 rounded bg-panel2 border border-border text-gray-300 hover:text-white"
-          >
-            Export Session
-          </button>
-
-          <button
-            onClick={() => result && exportHTMLReport(result)}
-            className="hidden lg:inline-block text-xs px-2.5 py-1 rounded bg-panel2 border border-border text-gray-300 hover:text-white"
-          >
-            HTML Report
           </button>
         </div>
       </header>
 
-      {/* Main Body */}
-      <div className="flex-1 flex overflow-hidden relative">
-        {/* Sidebar File Explorer */}
+      {/* Main Workspace Layout */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* File Explorer Sidebar */}
         {showSidebar && (
-          <FileExplorerSidebar
-            files={files}
-            activeFileId={activeFileId}
-            onSelectFile={setActiveFileId}
-            onCreateFile={handleCreateFile}
-            onRenameFile={handleRenameFile}
-            onDeleteFile={handleDeleteFile}
-            onImportFiles={handleImportFiles}
-            onExportProject={handleExportProject}
-          />
+          <div className="w-56 border-r border-border bg-surface flex flex-col shrink-0">
+            <FileExplorerSidebar
+              files={files}
+              activeFileId={activeFileId}
+              onSelectFile={(id) => setActiveFileId(id)}
+              onCreateFile={(name, content) => {
+                const newFile = { id: `file-${Date.now()}`, name, content: content || `// ${name}\n` };
+                setFiles((prev) => [...prev, newFile]);
+                setActiveFileId(newFile.id);
+              }}
+              onDeleteFile={(id) => {
+                if (files.length <= 1) return;
+                setFiles((prev) => prev.filter((f) => f.id !== id));
+                if (activeFileId === id) setActiveFileId(files[0].id);
+              }}
+              onRenameFile={(id, newName) => {
+                setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, name: newName } : f)));
+              }}
+              onImportFiles={(imported) => {
+                const newItems = imported.map((imp, idx) => ({
+                  id: `file-imported-${Date.now()}-${idx}`,
+                  name: imp.name,
+                  content: imp.content,
+                }));
+                setFiles((prev) => [...newItems, ...prev]);
+                if (newItems.length > 0) setActiveFileId(newItems[0].id);
+              }}
+              onExportProject={() => {
+                const zipJson = JSON.stringify(files, null, 2);
+                const blob = new Blob([zipJson], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "compilergpt-workspace.json";
+                a.click();
+              }}
+            />
+          </div>
         )}
 
-        {/* Code Editor Pane */}
-        <div
-          style={{ width: `${editorWidthPercent}%` }}
-          className="flex flex-col border-r border-border min-w-[280px] max-w-[75%]"
-        >
-          {/* File Tab */}
-          <div className="px-3 py-1.5 text-[11px] uppercase tracking-wide text-gray-400 border-b border-border bg-panel flex justify-between items-center">
-            <span className="mono font-bold text-accent2">Editing {activeFile.name}</span>
-            <span className="text-[10px] text-gray-500">Nova Language</span>
+
+        {/* Code Editor Panel */}
+        <div style={{ width: `${editorWidthPercent}%` }} className="flex flex-col border-r border-border overflow-hidden">
+          {/* File Tabs Bar */}
+          <div className="h-8 bg-surface-elevated border-b border-border flex items-center px-2 gap-1 overflow-x-auto">
+            {files.map((f) => (
+              <button
+                key={f.id}
+                onClick={() => setActiveFileId(f.id)}
+                className={`px-3 py-1 rounded text-xs font-medium transition-all ${
+                  f.id === activeFileId
+                    ? "bg-surface text-sage border-t-2 border-sage font-bold"
+                    : "text-text-secondary hover:text-text-primary"
+                }`}
+              >
+                {f.name}
+              </button>
+            ))}
           </div>
 
-          <div className="flex-1">
+          <div className="flex-1 overflow-hidden bg-background">
             <CodeEditor
               value={activeFile.content}
-              onChange={handleUpdateActiveContent}
-              errors={allErrors}
+              onChange={handleEditorChange}
+              errors={errors}
               fontSize={fontSize}
               tabSize={tabSize}
               theme={theme}
             />
           </div>
 
-          {/* Optimization Controls */}
-          <div className="border-t border-border">
-            <OptimizationLab enabled={enabled} setEnabled={setEnabled} />
+          {/* Bottom Terminal Console */}
+          <div className="h-36 border-t border-border bg-surface shrink-0">
+            <BottomTerminalConsole
+              result={result}
+              compiling={compiling}
+              onRunCompile={() => runCompile(activeFile.content, language, enabled)}
+              onExportJSON={() => {
+                if (!result) return;
+                const rec = createSessionRecord(result);
+                exportSessionJSON(rec);
+              }}
+              onExportHTML={() => {
+                if (!result) return;
+                exportHTMLReport(result);
+              }}
+
+            />
           </div>
+
         </div>
 
-        {/* Resizable Draggable Splitter */}
+        {/* Resizer Splitter Bar */}
         <div
-          onMouseDown={handleMouseDownSplitter}
-          className="w-1 bg-border hover:bg-accent cursor-col-resize z-10 transition-colors flex items-center justify-center"
+          onMouseDown={handleMouseDown}
+          className="w-1.5 bg-border hover:bg-sage cursor-col-resize shrink-0 transition-colors z-10"
           title="Drag to resize panels"
         />
 
-        {/* Visualizations & Pipeline Pane */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-bg">
-          {/* Tab Header Bar */}
-          <div className="flex gap-1 px-3 py-2 border-b border-border bg-panel overflow-x-auto select-none">
+        {/* Visualization & Compiler Laboratory Panels */}
+        <div className="flex-1 flex flex-col overflow-hidden bg-surface">
+          {/* Visualizer Tab Bar */}
+          <div className="h-9 border-b border-border bg-surface flex items-center px-2 gap-1 overflow-x-auto shrink-0">
             {TABS.map((t) => (
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
                 className={`tab-btn flex items-center gap-1.5 ${
-                  tab === t.key ? "tab-btn-active font-bold" : "tab-btn-inactive"
+                  tab === t.key ? "tab-btn-active" : "tab-btn-inactive"
                 }`}
               >
                 <span>{t.icon}</span>
@@ -394,96 +435,97 @@ export default function Home() {
             ))}
           </div>
 
-          {/* Visualization Content Area */}
-          <div className="flex-1 overflow-hidden relative">
-            {tab === "explorer" && <CompilerExplorerView optLevels={result?.optLevels} />}
-            {tab === "timeline" && <LiveTimelineView timeline={result?.timeline} />}
-            {tab === "debugger" && <CompilerDebuggerView result={result} />}
-            {tab === "tokens" && <TokenTable tokens={result?.tokens} errors={result?.lexErrors} />}
-            {tab === "parsetable" && <ParseTableView parseTrace={result?.parseTrace} />}
-            {tab === "ast" && (
-              <div className="h-full grid grid-cols-3">
-                <div className="col-span-2 overflow-hidden border-r border-border h-full">
-                  <ASTView ast={result?.ast} onSelect={setSelectedNode} selectedId={selectedNode?.id ?? null} />
-                </div>
-                <div className="p-3 text-xs overflow-auto">
-                  <div className="text-gray-500 uppercase tracking-wide text-[11px] mb-2 font-bold">Node Detail Inspector</div>
-                  {selectedNode ? (
-                    <pre className="mono text-[11px] text-gray-300 whitespace-pre-wrap bg-panel2 p-3 rounded border border-border">
-                      {JSON.stringify(selectedNode, null, 2)}
-                    </pre>
-                  ) : (
-                    <div className="text-gray-500 italic">Click any AST node in the tree to inspect detailed attributes and type info.</div>
-                  )}
-                </div>
+          {/* Tab Content Panels */}
+          <div className="flex-1 overflow-auto bg-background">
+            {result ? (
+              <>
+                {tab === "explorer" && <CompilerExplorerView optLevels={result.optLevels} />}
+                {tab === "learn" && <EducationalModeView result={result} />}
+                {tab === "benchmark" && <BenchmarkLabView />}
+                {tab === "compare" && <SideBySideCompareView currentSource={activeFile.content} />}
+                {tab === "x86" && <X86View x86={result.x86} execution={result.x86Execution} />}
+                {tab === "wasm" && <WasmView wasm={result.wasm} />}
+                {tab === "research" && <ResearchDashboardView result={result} />}
+                {tab === "timeline" && <LiveTimelineView timeline={result.timeline} />}
+                {tab === "debugger" && <CompilerDebuggerView result={result} />}
+                {tab === "tokens" && <TokenTable tokens={result.tokens} errors={result.lexErrors} />}
+                {tab === "parsetable" && <ParseTableView parseTrace={result.parseTrace} />}
+                {tab === "ast" && <ASTView ast={result.ast} errors={result.parseErrors} />}
+                {tab === "scopetree" && <ScopeTreeView scopeTree={result.scopeTree} />}
+                {tab === "symbols" && <SymbolTableView symbols={result.symbolTable} />}
+                {tab === "ir" && (
+                  <div className="h-full grid grid-cols-2 gap-2 p-2">
+                    <IRView ir={result.ir} irOptimized={result.irOptimized} />
+                    <OptimizationLab
+                      enabled={enabled}
+                      onToggle={(key) => setEnabled((prev) => ({ ...prev, [key]: !prev[key] }))}
+                      logs={result.optimizationLogs}
+                    />
+                  </div>
+                )}
+                {tab === "replay" && <OptimizationReplayView logs={result.optimizationLogs} />}
+                {tab === "cfg" && <CFGView cfg={result.cfgAfter} onSelectNode={setSelectedNode} />}
+                {tab === "canvas" && (
+                  <GraphEngineView
+                    ast={result.ast}
+                    cfg={result.cfgAfter}
+                    callGraph={result.callGraph}
+                    dominators={result.dominators}
+                    regAlloc={result.regAlloc}
+                  />
+                )}
+                {tab === "dataflow" && <DataFlowView dataflow={result.dataflow} />}
+                {tab === "ssa" && <SSAView ssa={result.ssa} />}
+                {tab === "dominators" && <DominatorView dominators={result.dominators} />}
+                {tab === "regalloc" && <RegisterAllocView regAlloc={result.regAlloc} />}
+                {tab === "callgraph" && <CallGraphView callGraph={result.callGraph} />}
+                {tab === "memory" && <MemoryLayoutView memoryLayout={result.memoryLayout} />}
+                {tab === "asm" && <AssemblyView assembly={result.assembly} />}
+                {tab === "collab" && (
+                  <div className="p-4">
+                    <CollaborationPanel
+                      source={activeFile.content}
+                      onSourceChange={handleEditorChange}
+                    />
+                  </div>
+                )}
+                {tab === "metrics" && <MetricsDashboardView metrics={result.metrics} />}
+                {tab === "workspace" && (
+                  <MultiFileWorkspaceView
+                    workspace={{
+                      files: files.map((f) => ({ name: f.name, content: f.content })),
+                      entryPoint: activeFile.name,
+                    }}
+                  />
+                )}
+                {tab === "mentor" && (
+                  <MentorChat
+                    artifacts={{
+                      ir: result.ir,
+                      optimizedIR: result.irOptimized,
+                      optimizationLogs: result.optimizationLogs,
+                      cfg: result.cfgAfter,
+                      ssa: result.ssa,
+                      regAlloc: result.regAlloc,
+                      dominators: result.dominators,
+                      metrics: result.metrics,
+                    }}
+                  />
+                )}
+              </>
+            ) : (
+              <div className="h-full flex items-center justify-center text-xs text-text-secondary">
+                {compiling ? "Compiling source code..." : "Click 'Compile' or type code to view compiler artifacts."}
               </div>
             )}
-            {tab === "scopetree" && <ScopeTreeView scopeTree={result?.scopeTree} />}
-            {tab === "symbols" && <SymbolTableView symbols={result?.symbolTable} errors={[...(result?.parseErrors || []), ...(result?.semanticErrors || [])]} />}
-            {tab === "ir" && <IRView ir={result?.ir} irOptimized={result?.irOptimized} logs={result?.optimizationLogs} />}
-            {tab === "replay" && <OptimizationReplayView logs={result?.optimizationLogs} />}
-            {tab === "cfg" && <CFGView cfgBefore={result?.cfgBefore} cfgAfter={result?.cfgAfter} />}
-            {tab === "canvas" && <GraphEngineView result={result} />}
-            {tab === "dataflow" && <DataFlowView dataflow={result?.dataflow} />}
-
-            {tab === "ssa" && <SSAView ssa={result?.ssa} irOptimized={result?.irOptimized} />}
-            {tab === "dominators" && <DominatorView dominators={result?.dominators} />}
-            {tab === "regalloc" && <RegisterAllocView regAlloc={result?.regAlloc} />}
-            {tab === "callgraph" && <CallGraphView callGraph={result?.callGraph} />}
-            {tab === "memory" && <MemoryLayoutView memoryLayout={result?.memoryLayout} />}
-            {tab === "asm" && <AssemblyView assembly={result?.assembly} />}
-            {tab === "metrics" && <MetricsDashboardView metrics={result?.metrics} />}
-            {tab === "workspace" && <MultiFileWorkspaceView onWorkspaceCompiled={setResult} />}
-            {tab === "mentor" && <MentorChat artifacts={result} />}
           </div>
-
-          {/* Bottom Terminal Console */}
-          <BottomTerminalConsole
-            result={result}
-            compiling={compiling}
-            onRunCompile={() => runCompile(activeFile.content, enabled)}
-          />
         </div>
       </div>
-
-      {/* Bottom Status Bar */}
-      <footer className="h-6 border-t border-border bg-panel px-3 flex items-center justify-between text-[11px] text-gray-400 flex-shrink-0 mono">
-        <div className="flex items-center gap-4">
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-accent2 inline-block" />
-            <span>Ready</span>
-          </span>
-          <span>File: {activeFile.name}</span>
-          <span>Theme: {theme}</span>
-          <span>Opt Level: {optLevel}</span>
-        </div>
-        <div className="flex items-center gap-4">
-          {compiling ? (
-            <span className="text-accent pulse-glow font-bold">Compiling...</span>
-          ) : allErrors.length > 0 ? (
-            <span className="text-err font-bold">● {allErrors.length} Error(s)</span>
-          ) : (
-            <span className="text-accent2">● 0 Errors</span>
-          )}
-          <span>Compile Time: {result?.metrics?.compilationTimeMs?.toFixed(2) || "0.00"} ms</span>
-        </div>
-      </footer>
-
-      {/* Command Palette Modal */}
-      <CommandPalette
-        isOpen={cmdOpen}
-        onClose={() => setCmdOpen(false)}
-        onSelectTab={setTab}
-        onExportJSON={() => result && exportSessionJSON(createSessionRecord(result))}
-        onExportReport={() => result && exportHTMLReport(result)}
-      />
 
       {/* Settings Modal */}
       <SettingsModal
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
-        theme={theme}
-        setTheme={setTheme}
         fontSize={fontSize}
         setFontSize={setFontSize}
         tabSize={tabSize}
@@ -492,6 +534,16 @@ export default function Home() {
         setAutoCompile={setAutoCompile}
         optLevel={optLevel}
         setOptLevel={setOptLevel}
+        theme={theme}
+        setTheme={setTheme}
+      />
+
+      {/* Command Palette */}
+      <CommandPalette
+        isOpen={cmdOpen}
+        onClose={() => setCmdOpen(false)}
+        onSelectTab={(k) => setTab(k as TabKey)}
+        onSelectPreset={(code) => handleEditorChange(code)}
       />
     </div>
   );
