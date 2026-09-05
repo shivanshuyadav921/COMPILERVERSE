@@ -19,6 +19,7 @@ export default function CollaborationPanel({
 }) {
   const [roomId, setRoomId] = useState<string>("compiler-universe-collab");
   const [isConnected, setIsConnected] = useState<boolean>(true);
+  const [copyStatus, setCopyStatus] = useState<string>("");
   const [peers, setPeers] = useState<Peer[]>([
     { id: "peer-1", name: "Compiler Researcher (Alice)", color: PEER_COLORS[0], cursorLine: 3 },
     { id: "peer-2", name: "LLVM Engineer (Bob)", color: PEER_COLORS[2], cursorLine: 8 },
@@ -71,12 +72,16 @@ export default function CollaborationPanel({
         />
         <button
           onClick={() => {
-            navigator.clipboard?.writeText(window.location.href);
-            alert("Room session link copied to clipboard!");
+            navigator.clipboard?.writeText(window.location.href).then(() => {
+              setCopyStatus("Copied!");
+              setTimeout(() => setCopyStatus(""), 2000);
+            }).catch(() => {
+              prompt("Copy this link:", window.location.href);
+            });
           }}
           className="px-3 py-1 bg-surface-elevated hover:bg-surface border border-border rounded text-text-primary font-semibold"
         >
-          Copy Link
+          {copyStatus || "Copy Link"}
         </button>
       </div>
 

@@ -196,7 +196,7 @@ export async function executeWasmInBrowser(watText: string, exitVal = 0): Promis
     // If running in browser where WebAssembly is available
     if (typeof WebAssembly !== "undefined") {
       const wasmBytes = encodeMinimalWasmBinary();
-      const module = await WebAssembly.instantiate(wasmBytes, {
+      const wasmInstance = await WebAssembly.instantiate(wasmBytes, {
         env: {
           print: (v: number) => {
             stdout.push(String(v));
@@ -204,7 +204,7 @@ export async function executeWasmInBrowser(watText: string, exitVal = 0): Promis
         },
       });
 
-      const mainFn = (module.instance.exports as any).main;
+      const mainFn = (wasmInstance.instance.exports as any).main;
       const res = typeof mainFn === "function" ? mainFn() : exitVal;
       const duration = performance.now() - start;
 

@@ -9,9 +9,12 @@ const SUGGESTIONS = [
   "Show immediate dominators (idom)",
   "What optimizations modified the IR?",
   "Why did register allocation select these registers?",
-  "Explain register allocation K=8 colors",
+  "What tokens were produced by the lexer?",
+  "Explain the AST root node structure",
+  "What constants were folded in the optimizer?",
   "How many basic blocks were created?",
-  "What constants were folded?",
+  "What symbols are in the symbol table?",
+  "Explain register allocation K=8 colors",
 ];
 
 export default function MentorChat({ artifacts }: { artifacts: any }) {
@@ -57,6 +60,8 @@ export default function MentorChat({ artifacts }: { artifacts: any }) {
 
   const hasArtifacts = artifacts && (
     artifacts.ir?.length > 0 ||
+    artifacts.tokens?.length > 0 ||
+    artifacts.ast != null ||
     artifacts.cfg?.blocks?.length > 0 ||
     artifacts.ssa?.phiNodes?.length > 0
   );

@@ -115,11 +115,25 @@ export default function Home() {
 
   const [compiling, setCompiling] = useState(false);
 
+  // Toast notification state (replaces all alert() calls)
+  const [toast, setToast] = useState<{ message: string; type: "success" | "info" | "error" } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = useCallback((message: string, type: "success" | "info" | "error" = "success") => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({ message, type });
+    toastTimerRef.current = setTimeout(() => setToast(null), 3500);
+  }, []);
+
+  // Request ID counter — only accept results from the latest compile request (stale-result protection)
+  const compileRequestIdRef = useRef(0);
+
   const activeFile = useMemo(() => {
     return files.find((f) => f.id === activeFileId) || files[0];
   }, [files, activeFileId]);
 
   const runCompile = useCallback(async (src: string, lang: "nova" | "c", passes: Record<string, boolean>) => {
+    const requestId = ++compileRequestIdRef.current;
     setCompiling(true);
     try {
       const res = await fetch("/api/compile", {
@@ -128,11 +142,16 @@ export default function Home() {
         body: JSON.stringify({ source: src, language: lang, enabledPasses: passes }),
       });
       const data = await res.json();
-      setResult(data);
+      // Only apply result if this is still the latest pending request
+      if (requestId === compileRequestIdRef.current) {
+        setResult(data);
+      }
     } catch {
-      // ignore network errors
+      // Network errors are silently ignored; the last good result stays visible
     } finally {
-      setCompiling(false);
+      if (requestId === compileRequestIdRef.current) {
+        setCompiling(false);
+      }
     }
   }, []);
 
@@ -143,7 +162,8 @@ export default function Home() {
       if (isC && language !== "c") setLanguage("c");
       runCompile(activeFile.content, currentLang, enabled);
     }
-  }, [activeFile?.content, language, enabled, runCompile]);
+  // activeFile.name intentionally included so switching to a .c file auto-detects language
+  }, [activeFile?.content, activeFile?.name, language, enabled, runCompile]);
 
   const handleEditorChange = (newCode: string) => {
     setFiles((prev) =>
@@ -169,7 +189,7 @@ export default function Home() {
         // Fallback if clipboard isn't available
         prompt("Copy this shareable URL:", fullUrl);
       });
-      alert("Shareable compilation URL copied to clipboard! Anyone opening this link will reproduce your exact session.");
+      showToast("Share URL copied to clipboard! Anyone opening this link will see your exact compilation.", "success");
     }
   };
 
@@ -219,12 +239,12 @@ export default function Home() {
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        alert("File autosaved to workspace!");
+        showToast("Workspace saved.", "info");
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeFile.content, language, enabled, runCompile]);
+  }, [activeFile.content, language, enabled, runCompile, showToast]);
 
   // Panel Resizer Mouse Handlers
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -539,6 +559,12 @@ export default function Home() {
                 {tab === "mentor" && (
                   <MentorChat
                     artifacts={{
+                      source: activeFile.content,
+                      language,
+                      tokens: result.tokens,
+                      ast: result.ast,
+                      symbolTable: result.symbolTable,
+                      semanticErrors: result.semanticErrors,
                       ir: result.ir,
                       optimizedIR: result.irOptimized,
                       optimizationLogs: result.optimizationLogs,
@@ -547,13 +573,20 @@ export default function Home() {
                       regAlloc: result.regAlloc,
                       dominators: result.dominators,
                       metrics: result.metrics,
+                      x86: result.x86,
                     }}
                   />
                 )}
               </>
             ) : (
-              <div className="h-full flex items-center justify-center text-xs text-text-secondary">
-                {compiling ? "Compiling source code..." : "Click 'Compile' or type code to view compiler artifacts."}
+              <div className="h-full flex items-center justify-center text-xs text-text-secondary flex-col gap-3">
+                <div className="text-4xl opacity-30">⚡</div>
+                <div className="font-medium">
+                  {compiling ? "Compiling..." : "Write code and compile to explore the compiler pipeline."}
+                </div>
+                <div className="text-[11px]">
+                  {!compiling && "Use Ctrl+Enter to compile manually, or enable Auto-Compile in Settings."}
+                </div>
               </div>
             )}
           </div>
@@ -583,6 +616,31 @@ export default function Home() {
         onSelectTab={(k) => setTab(k as TabKey)}
         onSelectPreset={(code) => handleEditorChange(code)}
       />
+
+      {/* Toast Notification Overlay */}
+      {toast && (
+        <div
+          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-lg shadow-xl border text-sm font-medium flex items-center gap-2.5 transition-all animate-in fade-in slide-in-from-bottom-2 duration-200 ${
+            toast.type === "success"
+              ? "bg-sage/20 border-sage/50 text-sage"
+              : toast.type === "error"
+              ? "bg-terracotta/20 border-terracotta/50 text-terracotta"
+              : "bg-surface-elevated border-border text-text-primary"
+          }`}
+          role="status"
+          aria-live="polite"
+        >
+          <span>{toast.type === "success" ? "✓" : toast.type === "error" ? "✗" : "ℹ"}</span>
+          <span>{toast.message}</span>
+          <button
+            onClick={() => setToast(null)}
+            className="ml-2 opacity-60 hover:opacity-100"
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
+        </div>
+      )}
     </div>
   );
 }

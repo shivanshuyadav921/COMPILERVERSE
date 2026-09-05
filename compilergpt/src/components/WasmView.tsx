@@ -36,6 +36,17 @@ export default function WasmView({ wasm }: { wasm?: { wat: string; wasmBinary: U
         </button>
       </div>
 
+      {/* WASM Implementation Status Banner */}
+      <div className="bg-ochre/10 border border-ochre/30 rounded-lg px-3 py-2 text-xs flex items-start gap-2">
+        <span className="text-ochre mt-0.5">ℹ</span>
+        <div className="text-text-secondary">
+          <span className="text-ochre font-semibold">WAT generation: REAL</span> — WebAssembly Text Format is generated from the actual IR.{" "}
+          <span className="text-text-secondary font-semibold">Binary stub: MINIMAL</span> — The 32-byte binary is a valid <code className="bg-surface-elevated px-1 rounded">0x00 61 73 6d</code> stub.
+          Full binary generation (e.g. via <code className="bg-surface-elevated px-1 rounded">wat2wasm</code>) requires a native tool unavailable in serverless environments.
+        </div>
+      </div>
+
+
       <div className="flex-1 grid grid-cols-2 gap-3 overflow-hidden">
         {/* WAT Code View */}
         <div className="card p-3 flex flex-col overflow-hidden">
