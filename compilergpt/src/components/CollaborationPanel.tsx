@@ -18,30 +18,50 @@ export default function CollaborationPanel({
   onSourceChange: (s: string) => void;
 }) {
   const [roomId, setRoomId] = useState<string>("compiler-universe-collab");
-  const [isConnected, setIsConnected] = useState<boolean>(true);
+  const [isConnected, setIsConnected] = useState<boolean>(false);
   const [copyStatus, setCopyStatus] = useState<string>("");
-  const [peers, setPeers] = useState<Peer[]>([
-    { id: "peer-1", name: "Compiler Researcher (Alice)", color: PEER_COLORS[0], cursorLine: 3 },
-    { id: "peer-2", name: "LLVM Engineer (Bob)", color: PEER_COLORS[2], cursorLine: 8 },
-  ]);
+  const [peers, setPeers] = useState<Peer[]>([]);
   const channelRef = useRef<BroadcastChannel | null>(null);
+  const selfId = useRef<string>(`peer-${Math.random().toString(36).slice(2, 7)}`);
 
   useEffect(() => {
-    if (typeof BroadcastChannel !== "undefined") {
-      const channel = new BroadcastChannel(`compiler_collab_${roomId}`);
-      channelRef.current = channel;
+    if (typeof BroadcastChannel === "undefined") return;
 
-      channel.onmessage = (event) => {
-        if (event.data?.type === "CODE_SYNC" && event.data.source !== undefined) {
-          onSourceChange(event.data.source);
-        }
-      };
+    const currentSelfId = selfId.current;
+    const channel = new BroadcastChannel(`compiler_collab_${roomId}`);
+    channelRef.current = channel;
+    setIsConnected(true);
 
-      return () => {
-        channel.close();
-      };
-    }
+    // Announce presence to other tabs
+    channel.postMessage({ type: "PEER_JOIN", peerId: currentSelfId });
+
+    channel.onmessage = (event) => {
+      const { type, peerId, source, cursorLine } = event.data || {};
+      if (type === "CODE_SYNC" && source !== undefined) {
+        onSourceChange(source);
+      } else if (type === "PEER_JOIN" && peerId) {
+        setPeers((prev) => {
+          if (prev.some((p) => p.id === peerId)) return prev;
+          const color = PEER_COLORS[prev.length % PEER_COLORS.length];
+          return [...prev, { id: peerId, name: `Tab ${peerId.slice(-5)}`, color, cursorLine: 1 }];
+        });
+        // Reply so the joiner knows about us
+        channel.postMessage({ type: "PEER_JOIN", peerId: currentSelfId });
+      } else if (type === "PEER_LEAVE" && peerId) {
+        setPeers((prev) => prev.filter((p) => p.id !== peerId));
+      } else if (type === "CURSOR_UPDATE" && peerId && cursorLine !== undefined) {
+        setPeers((prev) => prev.map((p) => p.id === peerId ? { ...p, cursorLine } : p));
+      }
+    };
+
+    return () => {
+      channel.postMessage({ type: "PEER_LEAVE", peerId: currentSelfId });
+      channel.close();
+      setIsConnected(false);
+      setPeers([]);
+    };
   }, [roomId, onSourceChange]);
+
 
   const handleBroadcastCode = (newCode: string) => {
     onSourceChange(newCode);
@@ -54,13 +74,17 @@ export default function CollaborationPanel({
     <div className="card p-3 flex flex-col space-y-3 text-xs font-sans">
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-sage animate-pulse" />
-          <span className="font-bold text-text-primary">Live Collaboration Session</span>
+          <span className={`w-2.5 h-2.5 rounded-full ${isConnected ? "bg-sage animate-pulse" : "bg-gray-500"}`} />
+          <span className="font-bold text-text-primary">Tab Sync Session</span>
         </div>
         <span className="text-[11px] text-sage font-bold bg-sage/10 px-2 py-0.5 rounded border border-sage/40">
-          {isConnected ? "Connected (Local Broadcast)" : "Disconnected"}
+          {isConnected ? "Connected (Same-Origin Tabs)" : "Connecting…"}
         </span>
       </div>
+
+      <p className="text-[11px] text-text-secondary leading-relaxed">
+        Open this app in another tab in the same browser to sync code changes in real-time via BroadcastChannel.
+      </p>
 
       <div className="flex gap-2">
         <input
@@ -88,12 +112,12 @@ export default function CollaborationPanel({
       {/* Peer Avatars */}
       <div className="space-y-1.5">
         <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wide">
-          Active Collaborators ({peers.length + 1})
+          Active Tabs ({peers.length + 1})
         </span>
         <div className="flex flex-wrap gap-2">
           <div className="flex items-center gap-1.5 px-2 py-1 bg-surface-elevated border border-sage rounded-full text-[11px]">
             <span className="w-2 h-2 rounded-full bg-sage" />
-            <span className="font-bold text-text-primary">You (Host)</span>
+            <span className="font-bold text-text-primary">This Tab</span>
           </div>
           {peers.map((peer) => (
             <div
@@ -105,8 +129,12 @@ export default function CollaborationPanel({
               <span className="text-[10px] text-text-secondary opacity-70">L{peer.cursorLine}</span>
             </div>
           ))}
+          {peers.length === 0 && (
+            <span className="text-[11px] text-text-secondary opacity-60 italic">No other tabs connected</span>
+          )}
         </div>
       </div>
     </div>
   );
 }
+

@@ -139,13 +139,20 @@ export function runHallucinationBenchmark(artifacts: any): ResearchDashboardMetr
     };
   });
 
+  // Compute metrics from actual evaluation results
+  const totalEvaluations = evaluations.length;
+  const groundedVerified = evaluations.filter(e => e.status === "GROUNDED_VERIFIED").length;
+  const baselineHallucinated = evaluations.filter(e => e.baselineHallucinated).length;
+  const avgPrecision = evaluations.reduce((sum, e) => sum + e.groundedPrecision, 0) / totalEvaluations;
+  const avgCitations = evaluations.filter(e => e.groundedArtifactCitation.length > 0).length;
+
   return {
-    totalEvaluations: evaluations.length,
-    groundedAccuracyRate: 98.8,
-    groundedHallucinationRate: 0.0,
-    baselineAccuracyRate: 41.2,
-    baselineHallucinationRate: 58.8,
-    avgArtifactCitationCount: 2.4,
+    totalEvaluations,
+    groundedAccuracyRate: Math.round((groundedVerified / totalEvaluations) * 100 * 10) / 10,
+    groundedHallucinationRate: Math.round(((totalEvaluations - groundedVerified) / totalEvaluations) * 100 * 10) / 10,
+    baselineAccuracyRate: Math.round(((totalEvaluations - baselineHallucinated) / totalEvaluations) * 100 * 10) / 10,
+    baselineHallucinationRate: Math.round((baselineHallucinated / totalEvaluations) * 100 * 10) / 10,
+    avgArtifactCitationCount: Math.round((avgCitations / totalEvaluations) * 10) / 10,
     evaluations,
   };
 }

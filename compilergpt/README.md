@@ -103,13 +103,18 @@ Runs `tsc --noEmit` for full TypeScript validation across all 37 components and 
 
 ### Running Tests
 
-Start the dev server first, then:
-
 ```bash
 npm run test
 ```
 
-Or visit `http://localhost:3000/api/test` in your browser to see the full test results (20 tests covering lexer, parser, semantic analysis, IR generation, optimization, CFG, dataflow, SSA, dominator tree, register allocation, C-subset compilation, x86-64 backend, WASM generation, hallucination benchmark, and session codec).
+This runs all 20 compiler tests **standalone** via `tsx` — no dev server required. Tests directly exercise the compiler modules: lexer, parser, semantic analysis, IR generation, optimization (7 passes), CFG, dataflow, SSA, dominator tree, register allocation, C-subset compilation, x86-64 backend, WASM WAT generation, AI benchmark, and session codec.
+
+During development, you can also hit the `/api/test` endpoint directly (disabled in production by default; set `ENABLE_TEST_ENDPOINT=true` to enable):
+
+```
+GET http://localhost:3000/api/test
+```
+
 
 ---
 
